@@ -28,7 +28,8 @@ think in 3D: brackets, boxes, vases, knobs, threads, enclosures, furniture parts
 13. [When something doesn't work](#when-something-doesnt-work)
 14. [For AI assistants](#for-ai-assistants)
 15. [For developers](#for-developers)
-16. [License](#license)
+16. [Self-hosting with Docker](#self-hosting-with-docker)
+17. [License](#license)
 
 Inside the app, **More → Help** shows what every button does, and **More →
 Tutorial** builds a first part with you: an M10 bolt and the nut that fits it,
@@ -586,6 +587,32 @@ npx tsx tests/engine.test.ts   # one of the test suites in tests/
 
 Stack: TypeScript, Vite, three.js, replicad + OpenCascade (WebAssembly),
 no UI framework. Project autosave in IndexedDB.
+
+## Self-hosting with Docker
+
+There is no server-side code to configure: the whole app (CAD kernel included)
+runs in the browser, and projects are saved in each browser. To install a copy
+from GitHub on your own Docker host:
+
+```bash
+git clone https://github.com/noodleboy91/supergeometry.app.git
+cd supergeometry.app
+docker compose up -d --build
+```
+
+Open <http://localhost:8080> (or your server's address). To use a different
+host port, set it before starting:
+
+```bash
+SUPERGEOMETRY_PORT=80 docker compose up -d --build
+```
+
+The image builds the site with Node 22 (`npm ci && npm run build`) and serves
+`dist/` with nginx: SPA fallback, long-lived caching for hashed assets, the
+WebAssembly MIME type, and the security headers from `public/_headers`.
+No database, account or environment variables are needed. For HTTPS, put the
+container behind your existing reverse proxy (Caddy, Traefik, nginx) and proxy
+to port 80 — HTTPS is needed for the installable app and offline mode.
 
 ## License
 
