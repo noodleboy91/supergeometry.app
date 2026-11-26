@@ -30,7 +30,7 @@ docker compose -f compose.browser.yml up -d --build
 docker compose -f compose.server.yml up -d --build
 ```
 
-Open <http://localhost:8080>. To use another host port:
+Open <http://localhost:3103>. To use another host port:
 
 ```bash
 SUPERGEOMETRY_PORT=18080 docker compose -f compose.server.yml up -d --build
@@ -77,20 +77,13 @@ Endpoints (same origin, so the app's CSP needs no change):
 ## Access control and Cloudflare Tunnel
 
 With Cloudflare Tunnel + Zero Trust you can rely on Access for authentication:
-point the tunnel at `localhost:8080` and keep the container's port unpublished
+point the tunnel at `localhost:3103` and keep the container's port unpublished
 if the tunnel runs on the same host. HTTPS is required for installable/offline
 mode; `localhost` is the only exception.
 
-For defence in depth, set a shared token:
-
-```bash
-SUPERGEOMETRY_TOKEN='a-long-random-string' docker compose -f compose.server.yml up -d --build
-```
-
-The token is delivered to the browser in `/config.json` and sent as
-`x-sg-token` on API calls. It is a shared secret for a trusted group, not a
-per-user account system. Do not expose the app publicly without either Access
-or the token (ideally both).
+There is no app-level login or token: anyone who can reach the URL can see and
+change the stored projects. Keep the app behind Cloudflare Access (or another
+trusted gateway) in server mode.
 
 If you later want separate project lists per person, Cloudflare Access adds
 `Cf-Access-Authenticated-User-Email`; the API could scope rows by it. That is
@@ -142,10 +135,10 @@ docker compose -f compose.server.yml down
 | Symptom | What to check |
 | --- | --- |
 | `address already in use` | Change `SUPERGEOMETRY_PORT`, or stop the other service. |
-| `401 Unauthorized` from `/api` | `SUPERGEOMETRY_TOKEN` is set; the browser must load the page fresh so `/config.json` picks it up. |
+| Unauthorized access | The app has no token: check Cloudflare Access or your gateway rules. |
 | Projects from another browser don't appear | Open File → Open (that refreshes the list), and check both browsers use the same URL/origin. |
 | Old UI after an update | Hard refresh or unregister the service worker; confirm the container was recreated. |
-| Container unhealthy | `docker compose -f compose.server.yml logs` and `curl http://localhost:8080/health`. |
+| Container unhealthy | `docker compose -f compose.server.yml logs` and `curl http://localhost:3103/health`. |
 | Blank page / geometry error | Browser needs WebGL and WebAssembly; check that `/assets/*.wasm` returns `Content-Type: application/wasm`. |
 
 ## Licence

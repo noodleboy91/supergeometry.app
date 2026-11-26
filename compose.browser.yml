@@ -9,4 +9,4 @@ services:
     environment:
       STORAGE: browser
     ports:
-      - "${SUPERGEOMETRY_PORT:-8080}:8080"
+      - "${SUPERGEOMETRY_PORT:-3103}:3103"

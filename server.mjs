@@ -10,11 +10,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const DIST = path.join(path.dirname(fileURLToPath(import.meta.url)), "dist");
-const PORT = Number(process.env.PORT || 8080);
+const PORT = Number(process.env.PORT || 3103);
 const STORAGE = String(process.env.STORAGE || "browser").toLowerCase() === "server" ? "server" : "browser";
 const DATA_DIR = process.env.DATA_DIR || "/data";
 const DATA_FILE = path.join(DATA_DIR, "projects.json");
-const TOKEN = process.env.AUTH_TOKEN || "";
 
 // Copied from public/_headers, so a plain HTTP server keeps the same policy.
 const CSP =
@@ -120,11 +119,6 @@ async function readJson(req) {
   return value ? JSON.parse(value) : {};
 }
 
-function authorised(req) {
-  if (!TOKEN) return true;
-  return req.headers["x-sg-token"] === TOKEN;
-}
-
 async function handleApi(req, res, pathname) {
   // /api/projects or /api/projects/<id>
   const parts = pathname.split("/").filter(Boolean);
@@ -170,12 +164,9 @@ const server = http.createServer(async (req, res) => {
     const pathname = url.pathname;
 
     if (pathname === "/health") return sendJson(res, 200, { ok: true, storage: STORAGE });
-    if (pathname === "/config.json") {
-      return sendJson(res, 200, { storage: STORAGE, ...(TOKEN ? { token: TOKEN } : {}) });
-    }
+    if (pathname === "/config.json") return sendJson(res, 200, { storage: STORAGE });
     if (pathname.startsWith("/api/")) {
       if (STORAGE !== "server") return sendJson(res, 404, { error: "Server storage is disabled" });
-      if (!authorised(req)) return sendJson(res, 401, { error: "Unauthorized" });
       return await handleApi(req, res, pathname);
     }
     return await serveStatic(req, res, pathname);

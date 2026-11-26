@@ -610,10 +610,11 @@ opened from any browser:
 docker compose -f compose.server.yml up -d --build
 ```
 
-Both open at <http://localhost:8080>. Change the host port with
-`SUPERGEOMETRY_PORT=80`. In server mode, set `SUPERGEOMETRY_TOKEN` for a shared
-secret if Cloudflare Access is not in front of the app. Stop the current stack
-with `docker compose -f <the-other-file> down` before switching modes.
+Both open at <http://localhost:3103>. Change the host port with
+`SUPERGEOMETRY_PORT=80`. Put Cloudflare Access in front of the app when using
+server storage, so only your trusted users can reach the projects. Stop the
+current stack with `docker compose -f <the-other-file> down` before switching
+modes.
 
 The image builds with Node 22 and serves `dist/` with SPA fallback, the correct
 WebAssembly MIME type, and the caching and security headers from
@@ -621,7 +622,7 @@ WebAssembly MIME type, and the caching and security headers from
 cache and writes the same `.super` JSON through to `/api/projects`; the last
 save wins by timestamp. Undo history stays in the browser.
 
-For HTTPS, proxy to the container's port 8080. Full details, backups and
+For HTTPS, proxy to the container's port 3103. Full details, backups and
 troubleshooting are in [DOCKER.md](DOCKER.md).
 
 ## License

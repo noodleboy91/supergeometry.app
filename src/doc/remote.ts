@@ -13,8 +13,6 @@ export interface RemoteEntry {
 
 export interface AppConfig {
   storage: "browser" | "server";
-  /** Shared secret for deployments without Cloudflare Access in front. */
-  token?: string;
 }
 
 let config: AppConfig = { storage: "browser" };
@@ -37,12 +35,8 @@ export function serverStorage(): boolean {
   return config.storage === "server";
 }
 
-function headers(): Record<string, string> {
-  return config.token ? { "x-sg-token": config.token } : {};
-}
-
 export async function remoteList(): Promise<RemoteEntry[]> {
-  const res = await fetch("/api/projects", { headers: headers(), cache: "no-store" });
+  const res = await fetch("/api/projects", { cache: "no-store" });
   if (!res.ok) throw new Error(`list: ${res.status}`);
   return (await res.json()) as RemoteEntry[];
 }
@@ -50,14 +44,14 @@ export async function remoteList(): Promise<RemoteEntry[]> {
 export async function remotePut(entry: RemoteEntry): Promise<void> {
   const res = await fetch(`/api/projects/${encodeURIComponent(entry.id)}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json", ...headers() },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(entry),
   });
   if (!res.ok) throw new Error(`put: ${res.status}`);
 }
 
 export async function remoteDelete(id: string): Promise<void> {
-  const res = await fetch(`/api/projects/${encodeURIComponent(id)}`, { method: "DELETE", headers: headers() });
+  const res = await fetch(`/api/projects/${encodeURIComponent(id)}`, { method: "DELETE" });
   if (!res.ok) throw new Error(`delete: ${res.status}`);
 }
 
