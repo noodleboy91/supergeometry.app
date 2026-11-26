@@ -1,0 +1,12 @@
+# Browser storage: the app is served, but every project stays in each browser.
+# Nothing is written to a volume. This is the original superGeometry behaviour.
+services:
+  supergeometry:
+    build: .
+    image: supergeometry:browser
+    container_name: supergeometry
+    restart: unless-stopped
+    environment:
+      STORAGE: browser
+    ports:
+      - "${SUPERGEOMETRY_PORT:-8080}:8080"

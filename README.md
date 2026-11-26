@@ -584,35 +584,45 @@ npx tsx tests/engine.test.ts   # one of the test suites in tests/
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): how it's built and why
 - [docs/FEATURES.md](docs/FEATURES.md): feature list
+- [DOCKER.md](DOCKER.md): both Docker install modes in detail
 
 Stack: TypeScript, Vite, three.js, replicad + OpenCascade (WebAssembly),
 no UI framework. Project autosave in IndexedDB.
 
 ## Self-hosting with Docker
 
-There is no server-side code to configure: the whole app (CAD kernel included)
-runs in the browser, and projects are saved in each browser. To install a copy
-from GitHub on your own Docker host:
+There are two Compose files. Both build the same image with a small
+dependency-free Node server (no nginx needed); the file you choose decides
+where projects live.
+
+**Browser storage** — the original behaviour, nothing saved on the server:
 
 ```bash
 git clone https://github.com/noodleboy91/supergeometry.app.git
 cd supergeometry.app
-docker compose up -d --build
+docker compose -f compose.browser.yml up -d --build
 ```
 
-Open <http://localhost:8080> (or your server's address). To use a different
-host port, set it before starting:
+**Server storage** — projects are mirrored to a named volume, so they can be
+opened from any browser:
 
 ```bash
-SUPERGEOMETRY_PORT=80 docker compose up -d --build
+docker compose -f compose.server.yml up -d --build
 ```
 
-The image builds the site with Node 22 (`npm ci && npm run build`) and serves
-`dist/` with nginx: SPA fallback, long-lived caching for hashed assets, the
-WebAssembly MIME type, and the security headers from `public/_headers`.
-No database, account or environment variables are needed. For HTTPS, put the
-container behind your existing reverse proxy (Caddy, Traefik, nginx) and proxy
-to port 80 — HTTPS is needed for the installable app and offline mode.
+Both open at <http://localhost:8080>. Change the host port with
+`SUPERGEOMETRY_PORT=80`. In server mode, set `SUPERGEOMETRY_TOKEN` for a shared
+secret if Cloudflare Access is not in front of the app. Stop the current stack
+with `docker compose -f <the-other-file> down` before switching modes.
+
+The image builds with Node 22 and serves `dist/` with SPA fallback, the correct
+WebAssembly MIME type, and the caching and security headers from
+`public/_headers`. Server storage keeps the browser's IndexedDB as an offline
+cache and writes the same `.super` JSON through to `/api/projects`; the last
+save wins by timestamp. Undo history stays in the browser.
+
+For HTTPS, proxy to the container's port 8080. Full details, backups and
+troubleshooting are in [DOCKER.md](DOCKER.md).
 
 ## License
 

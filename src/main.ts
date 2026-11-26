@@ -1,5 +1,7 @@
 import "./style.css";
 import { App } from "./app";
+import { syncFromRemote } from "./doc/library";
+import { loadConfig } from "./doc/remote";
 import { outerScrollbars } from "./ui/scrollbars";
 import { installDebug } from "./debug";
 import { keepPageSteady } from "./ui/steady";
@@ -20,8 +22,14 @@ keepPageSteady();
 // Scroll bars outside the windows, only while scrolling.
 outerScrollbars();
 
-const app = new App(document.getElementById("view") as HTMLCanvasElement);
-// Handy for debugging from the console.
-(window as unknown as { supergeometry: App }).supergeometry = app;
-// And sg: read and work the app from the console (sg.help()).
-installDebug(app);
+// Storage mode is set at install time by /config.json. A plain static host has
+// no config file and keeps the original browser-only behaviour.
+void (async () => {
+  await loadConfig();
+  await syncFromRemote();
+  const app = new App(document.getElementById("view") as HTMLCanvasElement);
+  // Handy for debugging from the console.
+  (window as unknown as { supergeometry: App }).supergeometry = app;
+  // And sg: read and work the app from the console (sg.help()).
+  installDebug(app);
+})();

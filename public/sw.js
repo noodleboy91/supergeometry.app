@@ -73,8 +73,14 @@ self.addEventListener("fetch", (e) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== location.origin) return;
-  // The update check always asks the site.
-  if (url.searchParams.has("check") || url.pathname.endsWith("offline-files.json")) return;
+  // The update check, the storage config and project API always ask the site.
+  if (
+    url.searchParams.has("check") ||
+    url.pathname.endsWith("offline-files.json") ||
+    url.pathname === "/config.json" ||
+    url.pathname.startsWith("/api/")
+  )
+    return;
   if (req.mode === "navigate") {
     // Online: the site's page (a new version shows up). Offline or very slow: the stored one.
     e.respondWith(

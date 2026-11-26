@@ -1,5 +1,6 @@
-# superGeometry.app is a static site: no server code, no database.
-# Build the site with Node, then serve dist/ with nginx.
+# superGeometry.app is a static site; this image serves dist/ with a tiny
+# dependency-free Node server. STORAGE=browser|server is chosen by the Compose
+# file, and only server mode uses the /data volume.
 
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
@@ -16,9 +17,12 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM nginx:1.27-alpine
-COPY --from=build /app/dist/ /usr/share/nginx/html/
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
+FROM node:22-alpine
+WORKDIR /app
+COPY --from=build /app/dist ./dist
+COPY server.mjs ./server.mjs
+ENV PORT=8080 STORAGE=browser DATA_DIR=/data
+EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
-  CMD wget -q -O - http://127.0.0.1/ >/dev/null || exit 1
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["node", "server.mjs"]

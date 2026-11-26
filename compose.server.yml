@@ -1,0 +1,19 @@
+# Server storage: projects are mirrored to /data in a named volume, so they can
+# be opened from any browser. Put Cloudflare Access (or AUTH_TOKEN) in front.
+services:
+  supergeometry:
+    build: .
+    image: supergeometry:server
+    container_name: supergeometry
+    restart: unless-stopped
+    environment:
+      STORAGE: server
+      # Optional shared secret for setups without Cloudflare Access.
+      AUTH_TOKEN: ${SUPERGEOMETRY_TOKEN:-}
+    volumes:
+      - supergeometry-data:/data
+    ports:
+      - "${SUPERGEOMETRY_PORT:-8080}:8080"
+
+volumes:
+  supergeometry-data:

@@ -6,6 +6,7 @@ import { ImprintOp, WrapOp } from "./tools/wrapOps";
 import { DocStore, parseProject } from "./doc/store";
 import { SUPPORT, openSupport } from "./ui/support";
 import { currentProjectId, forgetProject, keepProject, libraryEntries, newProjectId, projectText, renameProject, setCurrentProject } from "./doc/library";
+import { serverStorage } from "./doc/remote";
 import { showLibrary } from "./ui/library";
 import { showAbout } from "./ui/about";
 import { showWhatsNew } from "./ui/whatsNew";
@@ -2023,7 +2024,10 @@ export class App implements AppContext {
     // The library's copy follows when the app goes to the background (the
     // autosave holds the newest state meanwhile, and is copied in at the next
     // start if need be) - no extra saving or drawing while modelling.
-    this.store.onSaved = (text) => document.visibilityState === "hidden" && void this.keepInLibrary(text);
+    this.store.onSaved = (text) => {
+      // Browser mode only copies on hide; server mode writes through (debounced in remote.ts).
+      if (document.visibilityState === "hidden" || serverStorage()) void this.keepInLibrary(text);
+    };
     // Its newest state is the autosave (a page closed mid-save left the library a step behind).
     const text = JSON.stringify(this.store.doc);
     // (No picture: nothing is drawn yet.)

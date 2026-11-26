@@ -1,9 +1,9 @@
-// The projects kept on this device (File → Open shows them). Each one is its
-// whole document, saved as it's worked on, with a small picture of it. They
-// live in the browser's storage for this site: More → Update leaves
-// them alone; clearing the site's data in the browser's settings removes them.
+// The projects in File → Open. They are kept in the browser's storage for this
+// site (so the app works offline), and, when the server is in "server" storage
+// mode, mirrored to /api so any browser can open them again.
 
 import { idbDel, idbGet, idbSet } from "./store";
+import { pushNow, remoteDelete, remoteList, schedulePut, serverStorage, type RemoteEntry } from "./remote";
 
 export interface LibraryEntry {
   id: string;
@@ -24,8 +24,8 @@ export function newProjectId(): string {
   return `p-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/** The projects, newest first. */
-export async function libraryEntries(): Promise<LibraryEntry[]> {
+/** The browser's own copy of the list, newest first. */
+async function localEntries(): Promise<LibraryEntry[]> {
   try {
     const list = JSON.parse((await idbGet(INDEX)) ?? "[]") as LibraryEntry[];
     return Array.isArray(list) ? list.sort((a, b) => b.modified - a.modified) : [];
@@ -37,9 +37,59 @@ export async function libraryEntries(): Promise<LibraryEntry[]> {
 /** The index is read, changed and written back one change at a time. */
 let queue: Promise<unknown> = Promise.resolve();
 function editIndex(fn: (list: LibraryEntry[]) => LibraryEntry[]): Promise<void> {
-  const run = queue.then(async () => idbSet(INDEX, JSON.stringify(fn(await libraryEntries()))));
+  const run = queue.then(async () => idbSet(INDEX, JSON.stringify(fn(await localEntries()))));
   queue = run.catch(() => undefined);
   return run;
+}
+
+let lastSync = 0;
+let syncing: Promise<void> | null = null;
+
+/**
+ * Copy newer server projects into this browser, including the open one's
+ * autosave. Older local copies (and anything made offline) are left alone.
+ */
+export function syncFromRemote(): Promise<void> {
+  if (!serverStorage()) return Promise.resolve();
+  if (syncing) return syncing;
+  syncing = (async () => {
+    let list: RemoteEntry[];
+    try {
+      list = await remoteList();
+    } catch {
+      return; // offline: the browser's own copies are still good
+    }
+    const current = await idbGet(CURRENT);
+    for (const remote of list) {
+      const local = (await localEntries()).find((e) => e.id === remote.id);
+      if (local && local.modified >= remote.modified) continue;
+      await idbSet(docKey(remote.id), remote.text);
+      await editIndex((items) => {
+        const old = items.find((e) => e.id === remote.id);
+        const entry: LibraryEntry = {
+          id: remote.id,
+          name: remote.name,
+          modified: remote.modified,
+          thumb: remote.thumb ?? old?.thumb,
+          size: remote.size,
+        };
+        return [entry, ...items.filter((e) => e.id !== remote.id)];
+      });
+      if (current === remote.id) await idbSet("autosave", remote.text);
+    }
+  })().finally(() => {
+    syncing = null;
+    lastSync = Date.now();
+  });
+  return syncing;
+}
+
+/** The projects, newest first. In server mode the list is refreshed now and then. */
+export async function libraryEntries(): Promise<LibraryEntry[]> {
+  if (serverStorage() && syncing === null && Date.now() - lastSync > 4000) {
+    await syncFromRemote().catch(() => undefined);
+  }
+  return localEntries();
 }
 
 /** Which project is open (its autosave is its newest state). */
@@ -50,14 +100,26 @@ export function setCurrentProject(id: string): Promise<void> {
   return idbSet(CURRENT, id);
 }
 
-/** Keep a project (its document as text; a new picture, or the one it had). */
-export async function keepProject(id: string, name: string, text: string, thumb?: string): Promise<void> {
+/** Write to this browser, then (in server mode) to the server. */
+async function persistProject(id: string, name: string, text: string, thumb: string | undefined, modified: number): Promise<void> {
+  const was = (await localEntries()).find((e) => e.id === id);
+  const savedThumb = thumb ?? was?.thumb;
   await idbSet(docKey(id), text);
   await editIndex((list) => {
-    const was = list.find((e) => e.id === id);
-    const entry: LibraryEntry = { id, name, modified: Date.now(), thumb: thumb ?? was?.thumb, size: text.length };
+    const entry: LibraryEntry = { id, name, modified, thumb: savedThumb, size: text.length };
     return [entry, ...list.filter((e) => e.id !== id)];
   });
+  if (serverStorage()) {
+    const remote: RemoteEntry = { id, name, modified, thumb: savedThumb, size: text.length, text };
+    // On hide/pagehide there is no time for a debounce.
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") void pushNow(remote);
+    else schedulePut(remote);
+  }
+}
+
+/** Keep a project (its document as text; a new picture, or the one it had). */
+export async function keepProject(id: string, name: string, text: string, thumb?: string): Promise<void> {
+  await persistProject(id, name, text, thumb, Date.now());
   askToKeepStorage();
 }
 
@@ -67,22 +129,33 @@ export function projectText(id: string): Promise<string | null> {
 
 /** A kept project's new name (in its document too). Its place in the list stays. */
 export async function renameProject(id: string, name: string): Promise<void> {
-  const text = await idbGet(docKey(id));
+  const text = await projectText(id);
+  const modified = Date.now();
   if (text) {
     try {
       const doc = JSON.parse(text);
       doc.name = name;
-      await idbSet(docKey(id), JSON.stringify(doc));
+      await persistProject(id, name, JSON.stringify(doc), undefined, modified);
+      return;
     } catch {
       // unreadable: the list's name still changes
     }
   }
-  await editIndex((list) => list.map((e) => (e.id === id ? { ...e, name } : e)));
+  await editIndex((list) => list.map((e) => (e.id === id ? { ...e, name, modified } : e)));
+  if (serverStorage()) {
+    try {
+      const found = (await remoteList()).find((e) => e.id === id);
+      if (found) schedulePut({ ...found, name, modified });
+    } catch {
+      // offline: queued on the next save
+    }
+  }
 }
 
 export async function forgetProject(id: string): Promise<void> {
   await editIndex((list) => list.filter((e) => e.id !== id));
   await idbDel(docKey(id));
+  if (serverStorage()) void remoteDelete(id).catch(() => undefined);
 }
 
 /**
