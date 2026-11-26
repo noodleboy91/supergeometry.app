@@ -421,18 +421,21 @@ can't be rebuilt after a change, it's marked and the reason is shown.
   you've worked on is **kept on this device**.
 - **File → Open** shows them as a gallery of pictures, newest first (it also
   greets you each time the app opens): tap one to carry on with it, start a
-  **New project**, or **Open file…** for any `.super` file (it joins the
+  **New project**, or **Open local file…** for any `.super` file (it joins the
   gallery); with many, the row scrolls side to side. Each card can be saved
   as a file or deleted. They live in the
   browser's storage for this site: **More → Update** keeps them, but
   clearing the site's data in the browser's settings deletes them.
-- **File → Save project** downloads a `.super` file (keep it as a backup or
-  move it to another device).
+- **File → Save** (Ctrl S) writes to the server in a server-storage install
+  (it downloads a file in browser-only installs). **Save as…** keeps a copy
+  under a new name, **Save locally** downloads a `.super` file (keep it as a
+  backup or move it to another device), and **Open local file…** opens one
+  from your computer.
 - **File → Export STL** or **Export 3MF** for 3D printing (3MF keeps body
   names and colours), **Export STEP** for other CAD programs. With bodies
   selected (or isolated), only those are exported. On phones and tablets the
-  **share mark** next to each export (and Save) sends the file straight to
-  another app - mail, messages, a slicer…
+  **share mark** next to each export (and Save locally) sends the file straight
+  to another app - mail, messages, a slicer…
 - **File → Export DXF (sketch)** saves a sketch's curves as a 2D drawing for
   laser cutters, CNC and drawing programs: open **Items**, tap the sketch, then
   File → Export DXF. Construction lines go on their own layer.
@@ -620,7 +623,10 @@ The image builds with Node 22 and serves `dist/` with SPA fallback, the correct
 WebAssembly MIME type, and the caching and security headers from
 `public/_headers`. Server storage keeps the browser's IndexedDB as an offline
 cache and writes the same `.super` JSON through to `/api/projects`; the last
-save wins by timestamp. Undo history stays in the browser.
+save wins by timestamp. Undo history stays in the browser. In server mode,
+File → Save (Ctrl S) writes to the server, Save as… makes a separate copy, Save
+locally downloads a `.super` file, and Open local file… opens one from your
+computer; in browser mode, Save downloads as before.
 
 For HTTPS, proxy to the container's port 3103. Full details, backups and
 troubleshooting are in [DOCKER.md](DOCKER.md).

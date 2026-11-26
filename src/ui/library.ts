@@ -1,5 +1,5 @@
 // File → Open: the projects kept on this device, as a gallery of pictures.
-// Tap one to open it; New project starts one; Open file… still takes any
+// Tap one to open it; New project starts one; Open local file… still takes any
 // .super file. It also opens by itself when the app starts, with a welcome
 // and the ways to support the project.
 
@@ -89,6 +89,8 @@ export interface LibraryOptions {
   welcome?: boolean;
   /** A Full screen button (null: not offered). */
   fullscreen?: { isFull(): boolean; toggle(): void } | null;
+  /** Where projects are saved, for the words at the top and bottom. */
+  storage?: "browser" | "server";
   /** Told when the window is closed, however it was (its close button, a project picked, Esc). */
   onClose?(): void;
 }
@@ -108,9 +110,9 @@ export function showLibrary(entries: LibraryEntry[], currentId: string | null, a
   const newBtn = el("button", entries.length ? "text-btn" : "text-btn primary", "New project");
   newBtn.type = "button";
   newBtn.title = "Start an empty project (the open one stays here)";
-  const fileBtn = el("button", entries.length ? "text-btn primary" : "text-btn", "Open file…");
+  const fileBtn = el("button", entries.length ? "text-btn primary" : "text-btn", "Open local file…");
   fileBtn.type = "button";
-  fileBtn.title = "Open a .super file from this device or elsewhere";
+  fileBtn.title = "Open a .super file from this computer";
   const closeBtn = el("button", "icon-btn library-close");
   closeBtn.type = "button";
   closeBtn.title = "Close";
@@ -152,7 +154,9 @@ export function showLibrary(entries: LibraryEntry[], currentId: string | null, a
       el(
         "div",
         "library-welcome",
-        "A free parametric, history-based 3D CAD app for every device: sketch an idea, turn it into a solid part and take it wherever it's going next. Everything stays on this device only.",
+        opts.storage === "server"
+          ? "A free parametric, history-based 3D CAD app for every device: sketch an idea, turn it into a solid part and take it wherever it's going next. Projects are saved on this server and copied into each browser for offline use."
+          : "A free parametric, history-based 3D CAD app for every device: sketch an idea, turn it into a solid part and take it wherever it's going next. Everything stays on this device only.",
       ),
     );
     if (entries.length) box.append(el("div", "library-section", "Your projects"));
@@ -222,14 +226,14 @@ export function showLibrary(entries: LibraryEntry[], currentId: string | null, a
     });
     const dl = el("button", "icon-btn");
     dl.type = "button";
-    dl.title = "Save as a .super file";
+    dl.title = "Save locally as a .super file";
     dl.innerHTML = DOWNLOAD;
     dl.addEventListener("click", () => act.download(e.id));
     info.append(text, ren, dl);
     if (!isOpen) {
       const del = el("button", "icon-btn danger");
       del.type = "button";
-      del.title = "Delete from this device";
+      del.title = opts.storage === "server" ? "Delete from the server and this browser" : "Delete from this device";
       del.innerHTML = icons.trash;
       twoTap(del, `library:${e.id}`, async () => {
         await act.remove(e.id);
@@ -255,7 +259,15 @@ export function showLibrary(entries: LibraryEntry[], currentId: string | null, a
   grid.dataset.ownBar = "";
   box.append(grid);
   box.append(supportBox());
-  box.append(el("div", "dialog-note library-note", "Clearing this site's data in the browser's settings deletes your projects - save the ones that matter as files too."));
+  box.append(
+    el(
+      "div",
+      "dialog-note library-note",
+      opts.storage === "server"
+        ? "Projects are saved on the server and kept in this browser for offline use - save a .super file to move one elsewhere."
+        : "Clearing this site's data in the browser's settings deletes your projects - save the ones that matter as files too.",
+    ),
+  );
   back.append(box);
   back.addEventListener("pointerdown", (ev) => ev.target === back && close());
   window.addEventListener("keydown", onKey, true);

@@ -3,7 +3,7 @@
 // mode, mirrored to /api so any browser can open them again.
 
 import { idbDel, idbGet, idbSet } from "./store";
-import { pushNow, remoteDelete, remoteList, schedulePut, serverStorage, type RemoteEntry } from "./remote";
+import { pushNow, remoteDelete, remoteList, remotePut, schedulePut, serverStorage, type RemoteEntry } from "./remote";
 
 export interface LibraryEntry {
   id: string;
@@ -101,7 +101,14 @@ export function setCurrentProject(id: string): Promise<void> {
 }
 
 /** Write to this browser, then (in server mode) to the server. */
-async function persistProject(id: string, name: string, text: string, thumb: string | undefined, modified: number): Promise<void> {
+async function persistProject(
+  id: string,
+  name: string,
+  text: string,
+  thumb: string | undefined,
+  modified: number,
+  immediate = false,
+): Promise<RemoteEntry | null> {
   const was = (await localEntries()).find((e) => e.id === id);
   const savedThumb = thumb ?? was?.thumb;
   await idbSet(docKey(id), text);
@@ -111,16 +118,33 @@ async function persistProject(id: string, name: string, text: string, thumb: str
   });
   if (serverStorage()) {
     const remote: RemoteEntry = { id, name, modified, thumb: savedThumb, size: text.length, text };
-    // On hide/pagehide there is no time for a debounce.
+    // An explicit Save waits for the server; autosaves are debounced (or sent
+    // at once on hide/pagehide, where there is no time for the delay).
+    if (immediate) return remote;
     if (typeof document !== "undefined" && document.visibilityState === "hidden") void pushNow(remote);
     else schedulePut(remote);
   }
+  return null;
 }
 
 /** Keep a project (its document as text; a new picture, or the one it had). */
 export async function keepProject(id: string, name: string, text: string, thumb?: string): Promise<void> {
   await persistProject(id, name, text, thumb, Date.now());
   askToKeepStorage();
+}
+
+/** File → Save: write locally and wait for the server. Throws if the server save fails. */
+export async function saveProjectNow(id: string, name: string, text: string, thumb?: string): Promise<void> {
+  const remote = await persistProject(id, name, text, thumb, Date.now(), true);
+  askToKeepStorage();
+  if (!remote) return;
+  try {
+    await remotePut(remote);
+  } catch (err) {
+    // Keep this newest state for the online retry, not an older autosave.
+    schedulePut(remote);
+    throw err;
+  }
 }
 
 export function projectText(id: string): Promise<string | null> {

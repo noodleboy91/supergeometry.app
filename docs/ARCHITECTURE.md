@@ -1,7 +1,10 @@
 # Architecture
 
-superGeometry.app is a static web app. There is no server: everything (geometry kernel
-included) runs in the browser, so it can be hosted for free and works offline.
+superGeometry.app is a static web app: everything (geometry kernel included) runs
+in the browser, so it can be hosted for free and works offline. The optional
+Docker "server storage" mode adds a small Node HTTP server that serves the built
+files and mirrors projects to a JSON file on a volume; the CAD engine still stays
+in the browser.
 
 ```
  ┌──────────────── main thread ────────────────┐        ┌──────── Web Worker ────────┐
@@ -61,6 +64,8 @@ src/
   doc/
     types.ts         feature & document types (the file format)
     store.ts         undo/redo, IndexedDB autosave, file migration
+    library.ts       the project gallery; offline cache + optional server mirror
+    remote.ts        /api client for Docker server-storage mode
   sketch/            pure 2D code, shared by UI and kernel
     curves.ts        entities → primitives (line/arc/ellipse/spline), evaluation
     regions.ts       planar arrangement → regions with holes (+ stable refs)

@@ -59,7 +59,11 @@ time. The image is tagged differently (`supergeometry:browser` vs
   into the browser, including the open project's autosave. A save from another
   browser therefore shows up here. The last save wins by timestamp.
 - Undo/redo history stays local to the browser; it is not sent to the server.
-- `File → Save project` still downloads a portable `.super` file at any time.
+- In server mode, `File → Save` (Ctrl S) writes the open project to the server
+  at once. In browser-only mode it still downloads a `.super` file.
+- `Save as…` makes a separate project under a new name, leaving the original as
+  it was. `Save locally` always downloads a portable `.super` file, and
+  `Open local file…` opens one from your computer.
 
 Endpoints (same origin, so the app's CSP needs no change):
 

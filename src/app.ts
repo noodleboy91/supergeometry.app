@@ -5,7 +5,7 @@ import { PlanesAxisOp, TwoPointAxisOp, surfaceAxis } from "./tools/axisOps";
 import { ImprintOp, WrapOp } from "./tools/wrapOps";
 import { DocStore, parseProject } from "./doc/store";
 import { SUPPORT, openSupport } from "./ui/support";
-import { currentProjectId, forgetProject, keepProject, libraryEntries, newProjectId, projectText, renameProject, setCurrentProject } from "./doc/library";
+import { currentProjectId, forgetProject, keepProject, libraryEntries, newProjectId, projectText, renameProject, saveProjectNow, setCurrentProject } from "./doc/library";
 import { serverStorage } from "./doc/remote";
 import { showLibrary } from "./ui/library";
 import { showAbout } from "./ui/about";
@@ -1645,6 +1645,12 @@ export class App implements AppContext {
       if (document.getElementById("items")!.classList.contains("open")) this.items.toggle(false);
       if (document.body.classList.contains("history-open")) this.ui.toggleHistory(false);
     };
+    // Save means the server here; in a browser-only install it still downloads.
+    const saveBtn = document.getElementById("m-save")!;
+    if (serverStorage()) {
+      saveBtn.firstChild!.textContent = "Save to server ";
+      saveBtn.title = "Write this project to the server now";
+    } else saveBtn.title = "Download this project as a .super file";
     on("file-btn", () => ((more.hidden = true), menu.toggleAttribute("hidden"), !menu.hidden && phoneItemsAway()));
     on("more-btn", () => ((menu.hidden = true), more.toggleAttribute("hidden"), !more.hidden && phoneItemsAway()));
     on("history-btn", () => ((menu.hidden = more.hidden = true), this.ui.toggleHistory()));
@@ -1810,7 +1816,10 @@ export class App implements AppContext {
       });
     item("m-new", () => void this.newProject());
     item("m-open", () => void this.showProjects());
-    item("m-save", () => this.save());
+    item("m-open-local", () => this.open());
+    item("m-save", () => void this.save());
+    item("m-save-as", () => void this.saveAs());
+    item("m-save-local", () => this.saveLocal());
     item("m-stl", () => void this.export("stl"));
     item("m-step", () => void this.export("step"));
     item("m-3mf", () => void this.export3mf());
@@ -1823,12 +1832,12 @@ export class App implements AppContext {
     });
     item("m-dxf", () => this.exportDXF());
     item("m-svg", () => this.exportDXF("download", "svg"));
-    // A share button at the right of each export (and Save): straight to the share sheet.
+    // A share button at the right of each export (and Save locally): straight to the share sheet.
     // Only for the file types this browser will really share (Chrome on Android,
     // for one, refuses 3D and CAD files: a button there would only download).
     {
       const shares: [string, string, () => void][] = [
-        ["m-save", "super", () => this.save("share")],
+        ["m-save-local", "super", () => this.saveLocal("share")],
         ["m-stl", "stl", () => void this.export("stl", "share")],
         ["m-step", "step", () => void this.export("step", "share")],
         ["m-3mf", "3mf", () => void this.export3mf("share")],
@@ -1983,7 +1992,7 @@ export class App implements AppContext {
     );
     if (!choice) return;
     if (choice === "save") {
-      this.save();
+      this.saveLocal();
       // Give the download a moment to start before the page reloads.
       await new Promise((r) => setTimeout(r, 800));
     }
@@ -2076,7 +2085,7 @@ export class App implements AppContext {
     setTimeout(() => this.fit(), 400);
   }
 
-  /** File → Open: the projects kept on this device, and Open file… for any other. */
+  /** File → Open: the projects kept here, and Open local file… for any other. */
   /** Full screen from the projects window (null: not offered here). */
   private fullscreen: { isFull(): boolean; toggle(): void } | null = null;
 
@@ -2099,7 +2108,12 @@ export class App implements AppContext {
         else await renameProject(id, name);
         return name;
       },
-    }, { welcome, fullscreen: this.fullscreen, onClose: welcome ? () => this.offerTutorial() : undefined });
+    }, {
+      welcome,
+      fullscreen: this.fullscreen,
+      storage: serverStorage() ? "server" : "browser",
+      onClose: welcome ? () => this.offerTutorial() : undefined,
+    });
   }
 
   /** The tutorial has been offered on this device (or begun): it isn't offered again. */
@@ -2164,7 +2178,49 @@ export class App implements AppContext {
     if (text && e) download(new Blob([text], { type: "application/json" }), `${e.name}.super`);
   }
 
-  private save(how: Delivery = "download"): void {
+  /** File → Save (Ctrl S): save to the server here, or download in a browser-only install. */
+  private async save(): Promise<void> {
+    if (!serverStorage()) return this.saveLocal();
+    const id = this.projectId;
+    if (!id) return;
+    const name = this.store.doc.name;
+    try {
+      await saveProjectNow(id, name, JSON.stringify(this.store.doc));
+      this.ui.toast(`“${name}” saved to the server`);
+    } catch (err) {
+      this.ui.toast(`Could not save to the server: ${(err as Error).message}`, "error");
+    }
+  }
+
+  /** File → Save as…: a new project with its own id, leaving the original as it was. */
+  private async saveAs(): Promise<void> {
+    const answer = await this.ui.dialog("Save as", [{ key: "name", label: "Name", value: `${this.store.doc.name} copy` }]);
+    const name = answer?.name.trim();
+    if (!name) return;
+    const originalId = this.projectId;
+    const originalName = this.store.doc.name;
+    const text = JSON.stringify(this.store.doc);
+    if (originalId) await keepProject(originalId, originalName, text);
+    const doc = structuredClone(this.store.doc);
+    doc.name = name;
+    await this.switchProject(doc, newProjectId());
+    const id = this.projectId!;
+    const copy = JSON.stringify(this.store.doc);
+    if (serverStorage()) {
+      try {
+        await saveProjectNow(id, name, copy, this.viewPicture());
+        this.ui.toast(`Saved as “${name}” on the server`);
+      } catch (err) {
+        this.ui.toast(`“${name}” is in this browser, but the server save failed: ${(err as Error).message}`, "error");
+      }
+    } else {
+      await keepProject(id, name, copy, this.viewPicture());
+      this.ui.toast(`Saved as “${name}” in File → Open`);
+    }
+  }
+
+  /** File → Save locally: download the open project as a portable .super file. */
+  private saveLocal(how: Delivery = "download"): void {
     void this.deliver(new Blob([JSON.stringify(this.store.doc)], { type: "application/json" }), `${this.store.doc.name}.super`, how);
   }
 
